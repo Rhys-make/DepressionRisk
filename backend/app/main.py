@@ -1,18 +1,27 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 import os
 import hashlib
 import psycopg2
 from typing import List, Optional
-from datetime import datetime
-
+from datetime import datetime, timedelta
+from jose import JWTError, jwt
 app = FastAPI(
     title="用户注册登录系统",
     description="基于PostgreSQL的用户注册和登录后端服务",
     version="4.0.0"
 )
+
+# JWT配置
+SECRET_KEY = "your-secret-key-here-make-it-long-and-secure-in-production"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# 安全配置
+security = HTTPBearer()
 
 # 添加CORS中间件
 app.add_middleware(
@@ -46,10 +55,60 @@ class UserResponse(BaseModel):
     username: str
     created_at: str
 
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    expires_in: int
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+
 class ApiResponse(BaseModel):
     success: bool
     message: str
     data: Optional[dict] = None
+
+# JWT相关函数
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    """创建JWT访问令牌"""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def verify_token(token: str) -> Optional[str]:
+    """验证JWT令牌并返回用户名"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+        return username
+    except JWTError:
+        return None
+
+# 新增：根据token获取用户名
+
+def get_username_by_token(token: str) -> Optional[str]:
+    """通过token获取用户名"""
+    return verify_token(token)
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    """获取当前用户（从JWT令牌中）"""
+    token = credentials.credentials
+    username = verify_token(token)
+    if username is None:
+        raise HTTPException(
+            status_code=401,
+            detail="无效的认证凭据",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return username
 
 def get_database_connection():
     """获取PostgreSQL数据库连接"""
@@ -125,30 +184,7 @@ async def startup_event():
     """应用启动时初始化数据库"""
     init_database()
 
-@app.get("/", response_model=dict)
-async def index():
-    """根路径"""
-    return {
-        "message": "欢迎使用用户注册登录系统",
-        "version": "4.0.0",
-        "description": "这是一个基于PostgreSQL的用户注册和登录后端服务",
-        "database": {
-            "type": "PostgreSQL",
-            "config": DATABASE_CONFIG
-        },
-        "endpoints": {
-            "用户注册": "/api/register (POST)",
-            "用户登录": "/api/login (POST)",
-            "用户列表": "/api/users (GET)",
-            "健康检查": "/api/health (GET)"
-        },
-        "使用说明": {
-            "注册": "发送POST请求到/api/register，包含用户名、密码和确认密码",
-            "登录": "发送POST请求到/api/login，包含用户名和密码",
-            "密码安全": "密码使用SHA256加密存储",
-            "数据库": "使用PostgreSQL数据库"
-        }
-    }
+# 删除 index 根路径接口
 
 @app.post("/api/register", response_model=ApiResponse)
 async def register(user_data: UserRegister):
@@ -197,7 +233,7 @@ async def register(user_data: UserRegister):
 async def login(user_data: UserLogin):
     """
     用户登录接口
-    验证用户名和密码，从数据库中查询
+    验证用户名和密码，生成JWT token
     """
     try:
         username = user_data.username.strip()
@@ -208,10 +244,22 @@ async def login(user_data: UserLogin):
         
         # 验证用户名和密码
         if verify_user(username, password):
+            # 生成JWT token
+            access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            access_token = create_access_token(
+                data={"sub": username}, expires_delta=access_token_expires
+            )
+            # 新增：通过token获取用户名
+            checked_username = get_username_by_token(access_token)
             return ApiResponse(
                 success=True,
                 message="登录成功！",
-                data={"username": username}
+                data={
+                    "username": checked_username,
+                    "access_token": access_token,
+                    "token_type": "bearer",
+                    "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60  # 秒
+                }
             )
         else:
             raise HTTPException(status_code=401, detail="用户名或密码错误")
@@ -221,65 +269,40 @@ async def login(user_data: UserLogin):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
 
-@app.get("/api/users", response_model=ApiResponse)
-async def get_users():
+@app.get("/api/me", response_model=ApiResponse)
+async def get_current_user_info(current_user: str = Depends(get_current_user)):
     """
-    获取所有用户列表（仅用于测试）
+    获取当前用户信息
+    需要JWT token认证
     """
     try:
         conn = get_database_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT username, created_at FROM users')
-        users = cursor.fetchall()
+        cursor.execute('SELECT username, created_at FROM users WHERE username = %s', (current_user,))
+        user = cursor.fetchone()
         conn.close()
         
-        user_list = [{"username": user[0], "created_at": str(user[1])} for user in users]
-        
-        return ApiResponse(
-            success=True,
-            message="获取用户列表成功",
-            data={
-                "users": user_list,
-                "total": len(user_list)
-            }
-        )
-        
+        if user:
+            return ApiResponse(
+                success=True,
+                message="获取用户信息成功",
+                data={
+                    "username": user[0],
+                    "created_at": str(user[1])
+                }
+            )
+        else:
+            raise HTTPException(status_code=404, detail="用户不存在")
+            
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
-
-@app.get("/api/health", response_model=ApiResponse)
-async def health_check():
-    """
-    健康检查接口
-    """
-    try:
-        # 测试数据库连接
-        conn = get_database_connection()
-        conn.close()
-        db_status = "正常"
-    except Exception as e:
-        db_status = f"异常: {str(e)}"
-    
-    return ApiResponse(
-        success=True,
-        message="服务器运行正常",
-        data={
-            "status": "在线",
-            "database": {
-                "type": "PostgreSQL",
-                "status": db_status,
-                "config": {
-                    "host": DATABASE_CONFIG['host'],
-                    "port": DATABASE_CONFIG['port'],
-                    "database": DATABASE_CONFIG['database']
-                }
-            }
-        }
-    )
 
 if __name__ == "__main__":
     import uvicorn
     print("🚀 启动用户注册登录系统...")
     print("📊 数据库类型: PostgreSQL")
+    print("🔐 JWT认证: 已启用")
     print("🌐 服务地址: http://localhost:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
