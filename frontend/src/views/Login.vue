@@ -10,14 +10,14 @@
       <!-- 登录表单 -->
       <form @submit.prevent="handleLogin" class="login-form">
         <div class="form-group">
-          <label for="username" class="form-label">Email Address</label>
+          <label for="username" class="form-label">Username</label>
           <input
             id="username"
             v-model="form.username"
             type="text"
             class="form-input"
             :class="{ error: errors.username }"
-            placeholder="请输入邮箱地址"
+            placeholder="请输入用户名"
             @input="clearError('username')"
             @blur="validateField('username')"
           />
@@ -81,19 +81,6 @@
       </div>
 
       <!-- 社交登录 -->
-      <div class="social-login">
-        <div class="social-divider">
-          <span>或使用以下方式登录</span>
-        </div>
-        <div class="social-buttons">
-          <button class="social-button" @click="handleSocialLogin('wechat')">
-            <span>微信</span>
-          </button>
-          <button class="social-button" @click="handleSocialLogin('qq')">
-            <span>QQ</span>
-          </button>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -188,7 +175,7 @@ const handleForgotPassword = () => {
 
 // 处理注册
 const handleSignup = () => {
-  alert('注册功能正在开发中...')
+  router.push('/register')
 }
 
 // 处理社交登录

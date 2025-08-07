@@ -2,7 +2,7 @@ import axios from 'axios'
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: 'http://localhost:3001/api', // 后端API地址
+  baseURL: 'http://192.168.10.69:8000/api', // 后端API地址
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
@@ -41,22 +41,22 @@ api.interceptors.response.use(
 
 // 登录API
 export const loginApi = (credentials) => {
-  return api.post('/auth/login', credentials)
+  return api.post('/login', credentials)
 }
 
 // 注册API
 export const registerApi = (userData) => {
-  return api.post('/auth/register', userData)
+  return api.post('/register', userData)
 }
 
 // 获取用户信息API
 export const getUserInfoApi = () => {
-  return api.get('/auth/me')
+  return api.get('/users')
 }
 
-// 刷新token API
-export const refreshTokenApi = () => {
-  return api.post('/auth/refresh')
+// 健康检查API
+export const healthCheckApi = () => {
+  return api.get('/health')
 }
 
 export default api 
