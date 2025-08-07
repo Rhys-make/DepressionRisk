@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { loginApi } from '@/api/auth'
-import { mockLoginApi } from '@/api/mock'
+import { loginApi, registerApi } from '@/api/auth'
 
 export const useAuthStore = defineStore('auth', () => {
   // 状态
@@ -20,19 +19,55 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     
     try {
-      // 使用模拟API进行测试，您可以切换回真实API
-      const response = await mockLoginApi(credentials)
-      const { token: authToken, user: userData } = response.data
+      const response = await loginApi(credentials)
+      const { success, message, data } = response.data
       
-      // 保存token和用户信息
-      token.value = authToken
-      user.value = userData
-      localStorage.setItem('token', authToken)
-      localStorage.setItem('user', JSON.stringify(userData))
-      
-      return { success: true }
+      if (success) {
+        // 后端返回成功，保存用户信息
+        const userData = {
+          username: data.username,
+          email: data.username + '@example.com', // 模拟邮箱
+          role: 'user'
+        }
+        
+        // 生成模拟token（实际项目中后端应该返回JWT token）
+        const authToken = `token-${data.username}-${Date.now()}`
+        
+        // 保存token和用户信息
+        token.value = authToken
+        user.value = userData
+        localStorage.setItem('token', authToken)
+        localStorage.setItem('user', JSON.stringify(userData))
+        
+        return { success: true }
+      } else {
+        error.value = message || '登录失败'
+        return { success: false, error: error.value }
+      }
     } catch (err) {
-      error.value = err.response?.data?.message || '登录失败，请重试'
+      error.value = err.response?.data?.detail || '登录失败，请重试'
+      return { success: false, error: error.value }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const register = async (userData) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await registerApi(userData)
+      const { success, message, data } = response.data
+      
+      if (success) {
+        return { success: true, message }
+      } else {
+        error.value = message || '注册失败'
+        return { success: false, error: error.value }
+      }
+    } catch (err) {
+      error.value = err.response?.data?.detail || '注册失败，请重试'
       return { success: false, error: error.value }
     } finally {
       loading.value = false
@@ -74,6 +109,7 @@ export const useAuthStore = defineStore('auth', () => {
     
     // 方法
     login,
+    register,
     logout,
     clearError,
     initializeAuth
