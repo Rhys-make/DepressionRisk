@@ -3,21 +3,21 @@
     <div class="login-card">
       <!-- 登录头部 -->
       <div class="login-header">
-        <h1 class="login-title">欢迎回来</h1>
-        <p class="login-subtitle">请登录您的账户</p>
+        <h1 class="login-title">Login</h1>
+        <p class="login-subtitle">欢迎回来，请登录您的账户</p>
       </div>
 
       <!-- 登录表单 -->
       <form @submit.prevent="handleLogin" class="login-form">
         <div class="form-group">
-          <label for="username" class="form-label">用户名</label>
+          <label for="username" class="form-label">Email Address</label>
           <input
             id="username"
             v-model="form.username"
             type="text"
             class="form-input"
             :class="{ error: errors.username }"
-            placeholder="请输入用户名"
+            placeholder="请输入邮箱地址"
             @input="clearError('username')"
             @blur="validateField('username')"
           />
@@ -27,7 +27,7 @@
         </div>
 
         <div class="form-group">
-          <label for="password" class="form-label">密码</label>
+          <label for="password" class="form-label">Password</label>
           <input
             id="password"
             v-model="form.password"
@@ -50,7 +50,7 @@
               type="checkbox"
               class="checkbox-input"
             />
-            <span class="checkbox-label">记住我</span>
+            <span class="checkbox-label">Remember me</span>
           </label>
         </div>
 
@@ -60,7 +60,7 @@
           :disabled="loading || !isFormValid"
         >
           <span v-if="loading" class="loading-spinner"></span>
-          {{ loading ? '登录中...' : '登录' }}
+          {{ loading ? 'Logging in...' : 'Login' }}
         </button>
       </form>
 
@@ -72,8 +72,12 @@
       <!-- 登录页脚 -->
       <div class="login-footer">
         <a href="#" class="forgot-password" @click.prevent="handleForgotPassword">
-          忘记密码？
+          Forgot password?
         </a>
+        <div class="signup-link">
+          <span>Don't have an account? </span>
+          <a href="#" @click.prevent="handleSignup">Signup now</a>
+        </div>
       </div>
 
       <!-- 社交登录 -->
@@ -180,6 +184,11 @@ const handleLogin = async () => {
 // 处理忘记密码
 const handleForgotPassword = () => {
   alert('忘记密码功能正在开发中...')
+}
+
+// 处理注册
+const handleSignup = () => {
+  alert('注册功能正在开发中...')
 }
 
 // 处理社交登录
