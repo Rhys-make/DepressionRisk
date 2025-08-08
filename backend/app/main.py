@@ -9,6 +9,8 @@ import psycopg2
 from typing import List, Optional
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
+from routers.files import router as files_router
+from auth_utils import get_current_user, verify_token, security
 app = FastAPI(
     title="用户注册登录系统",
     description="基于PostgreSQL的用户注册和登录后端服务",
@@ -298,6 +300,8 @@ async def get_current_user_info(current_user: str = Depends(get_current_user)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+
+app.include_router(files_router)
 
 if __name__ == "__main__":
     import uvicorn
