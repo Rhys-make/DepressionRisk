@@ -22,8 +22,8 @@ DepressionRisk/
 │   ├── training/           # 训练模块
 │   ├── evaluation/         # 评估模块
 │   └── utils/              # 工具模块
-├── preprocess_data.py      # 数据预处理主脚本
-├── test_preprocessing.py   # 数据预处理测试脚本
+├── train_models.py         # 模型训练主脚本
+├── ensemble_predictor.py   # 集成预测器
 └── README.md              # 项目说明
 ```
 
@@ -147,11 +147,14 @@ print(f"特征: {features}")
 ### 运行测试
 
 ```bash
-# 运行数据预处理测试
-python test_preprocessing.py
+# 生成训练数据
+python simple_sample_generator.py
 
-# 运行完整的数据预处理（需要安装依赖）
-python preprocess_data.py
+# 训练模型
+python train_models.py
+
+# 使用集成预测器（测试模型预测）
+python ensemble_predictor.py
 ```
 
 ### 数据格式要求

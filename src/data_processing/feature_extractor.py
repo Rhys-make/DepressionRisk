@@ -20,22 +20,22 @@ class FeatureExtractor:
         """初始化特征提取器"""
         # 抑郁相关词汇（基于PHQ-9问卷）
         self.depression_keywords = {
-            '情绪低落': ['sad', 'depressed', 'down', 'blue', 'unhappy', 'miserable', 'hopeless'],
-            '兴趣丧失': ['uninterested', 'bored', 'no_interest', 'nothing_matters', 'empty'],
-            '睡眠问题': ['insomnia', 'sleep', 'tired', 'exhausted', 'fatigue', 'restless'],
-            '食欲变化': ['appetite', 'hungry', 'not_hungry', 'weight_loss', 'weight_gain'],
-            '注意力问题': ['concentrate', 'focus', 'attention', 'distracted', 'mind_wandering'],
-            '自我评价': ['worthless', 'failure', 'useless', 'guilty', 'blame_myself'],
-            '自杀想法': ['suicide', 'kill_myself', 'death', 'die', 'end_it_all', 'better_off_dead'],
-            '焦虑症状': ['anxious', 'worried', 'nervous', 'panic', 'fear', 'stress'],
-            '身体症状': ['pain', 'ache', 'sick', 'ill', 'headache', 'stomach'],
-            '社交退缩': ['alone', 'lonely', 'isolated', 'no_friends', 'avoid_people']
+            '情绪低落': ['sad', 'depressed', 'down', 'blue', 'unhappy', 'miserable', 'hopeless', 'sadness', 'depression'],
+            '兴趣丧失': ['uninterested', 'bored', 'no_interest', 'nothing_matters', 'empty', 'meaningless', 'pointless'],
+            '睡眠问题': ['insomnia', 'sleep', 'tired', 'exhausted', 'fatigue', 'restless', 'cant_sleep', 'sleepless'],
+            '食欲变化': ['appetite', 'hungry', 'not_hungry', 'weight_loss', 'weight_gain', 'eating'],
+            '注意力问题': ['concentrate', 'focus', 'attention', 'distracted', 'mind_wandering', 'racing_thoughts'],
+            '自我评价': ['worthless', 'failure', 'useless', 'guilty', 'blame_myself', 'hate_myself', 'disappointment'],
+            '自杀想法': ['suicide', 'kill_myself', 'death', 'die', 'end_it_all', 'better_off_dead', 'want_to_die', 'end_my_life'],
+            '焦虑症状': ['anxious', 'worried', 'nervous', 'panic', 'fear', 'stress', 'anxiety'],
+            '身体症状': ['pain', 'ache', 'sick', 'ill', 'headache', 'stomach', 'hurting'],
+            '社交退缩': ['alone', 'lonely', 'isolated', 'no_friends', 'avoid_people', 'loneliness']
         }
         
         # 情感词汇
         self.emotion_words = {
-            'positive': ['happy', 'joy', 'excited', 'love', 'great', 'wonderful', 'amazing', 'fantastic'],
-            'negative': ['sad', 'angry', 'frustrated', 'disappointed', 'hate', 'terrible', 'awful', 'horrible'],
+            'positive': ['happy', 'joy', 'excited', 'love', 'great', 'wonderful', 'amazing', 'fantastic', 'blessed', 'grateful', 'optimistic'],
+            'negative': ['sad', 'angry', 'frustrated', 'disappointed', 'hate', 'terrible', 'awful', 'horrible', 'hopeless', 'worthless', 'miserable'],
             'neutral': ['okay', 'fine', 'normal', 'average', 'usual', 'regular']
         }
         
@@ -105,9 +105,13 @@ class FeatureExtractor:
         features = {}
         text_lower = text.lower()
         
-        # 计算各类抑郁关键词的出现次数
+        # 计算各类抑郁关键词的出现次数（改进匹配方法）
         for category, keywords in self.depression_keywords.items():
-            count = sum(text_lower.count(keyword) for keyword in keywords)
+            count = 0
+            for keyword in keywords:
+                # 使用单词边界匹配，避免部分匹配
+                pattern = r'\b' + re.escape(keyword) + r'\b'
+                count += len(re.findall(pattern, text_lower))
             features[f'depression_{category}_count'] = count
         
         # 总抑郁关键词数量
@@ -202,13 +206,44 @@ class FeatureExtractor:
         """
         features = {}
         
-        # 合并所有特征
-        features.update(self.extract_linguistic_features(text))
-        features.update(self.extract_depression_features(text))
-        features.update(self.extract_emotion_features(text))
-        features.update(self.extract_social_media_features(text))
+        try:
+            # 合并所有特征
+            features.update(self.extract_linguistic_features(text))
+            features.update(self.extract_depression_features(text))
+            features.update(self.extract_emotion_features(text))
+            features.update(self.extract_social_media_features(text))
+        except Exception as e:
+            logger.error(f"特征提取失败: {e}")
+            # 返回默认特征
+            features = self._get_default_features()
         
         return features
+    
+    def _get_default_features(self) -> Dict[str, float]:
+        """
+        获取默认特征（当特征提取失败时使用）
+        
+        Returns:
+            默认特征字典
+        """
+        # 获取所有特征名称
+        sample_text = "This is a sample text for feature extraction."
+        try:
+            default_features = self.extract_linguistic_features(sample_text)
+            default_features.update(self.extract_depression_features(sample_text))
+            default_features.update(self.extract_emotion_features(sample_text))
+            default_features.update(self.extract_social_media_features(sample_text))
+            # 将所有值设为0
+            return {k: 0.0 for k in default_features.keys()}
+        except:
+            # 如果连默认特征都获取失败，返回基本特征
+            return {
+                'text_length': 0.0, 'word_count': 0.0, 'char_count': 0.0,
+                'avg_word_length': 0.0, 'sentence_count': 0.0, 'avg_sentence_length': 0.0,
+                'unique_words': 0.0, 'lexical_diversity': 0.0, 'type_token_ratio': 0.0,
+                'exclamation_count': 0.0, 'question_count': 0.0, 'ellipsis_count': 0.0,
+                'caps_words_count': 0.0, 'uppercase_ratio': 0.0
+            }
     
     def extract_batch_features(self, texts: List[str]) -> List[Dict[str, float]]:
         """
@@ -220,7 +255,28 @@ class FeatureExtractor:
         Returns:
             特征字典列表
         """
-        return [self.extract_all_features(text) for text in texts]
+        if not texts:
+            return []
+        
+        # 获取标准特征名称
+        standard_features = self._get_default_features()
+        feature_names = list(standard_features.keys())
+        
+        features_list = []
+        for text in texts:
+            try:
+                features = self.extract_all_features(text)
+                # 确保所有特征都存在
+                for name in feature_names:
+                    if name not in features:
+                        features[name] = 0.0
+                features_list.append(features)
+            except Exception as e:
+                logger.warning(f"特征提取失败: {e}")
+                # 返回默认特征字典
+                features_list.append(standard_features.copy())
+        
+        return features_list
     
     def get_feature_names(self) -> List[str]:
         """
