@@ -5,6 +5,7 @@ BERT-Capsule-Contrastive Learning模型
 
 import logging
 from typing import Dict, Any, Optional, List, Tuple
+from pathlib import Path
 import numpy as np
 import pandas as pd
 
@@ -278,6 +279,9 @@ class BertCapsuleWrapper(BaseModel):
         self.max_length = max_length
         self.model_params = kwargs
         
+        # 标记为文本模型
+        self.uses_text = True
+        
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self._initialize_model()
         
@@ -484,17 +488,53 @@ class BertCapsuleWrapper(BaseModel):
         if not self.is_trained:
             raise ValueError("模型尚未训练，无法保存")
         
-        # 保存PyTorch模型
-        torch.save(self.model.state_dict(), file_path)
+        file_path = Path(file_path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # 保存模型信息
-        super().save_model(file_path)
+        # 保存PyTorch模型权重
+        weights_path = file_path.with_suffix('.pt')
+        torch.save(self.model.state_dict(), weights_path)
+        
+        # 保存模型元数据（训练历史、特征名等）
+        meta_path = file_path.with_suffix('.meta.json')
+        meta_data = {
+            'model_name': self.model_name,
+            'is_trained': self.is_trained,
+            'feature_names': self.feature_names,
+            'training_history': self.training_history,
+            'model_params': self.model_params,
+            'bert_model_name': self.bert_model_name,
+            'weights_path': str(weights_path)
+        }
+        
+        import json
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta_data, f, ensure_ascii=False, indent=2)
+        
+        logger.info(f"BERT模型已保存到: {weights_path} 和 {meta_path}")
     
     def load_model(self, file_path):
         """加载模型"""
-        # 加载PyTorch模型
-        self.model.load_state_dict(torch.load(file_path, map_location=self.device))
-        self.is_trained = True
+        file_path = Path(file_path)
         
-        # 加载其他信息
-        super().load_model(file_path)
+        # 加载模型元数据
+        meta_path = file_path.with_suffix('.meta.json')
+        if meta_path.exists():
+            import json
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                meta_data = json.load(f)
+            
+            self.model_name = meta_data['model_name']
+            self.is_trained = meta_data['is_trained']
+            self.feature_names = meta_data.get('feature_names')
+            self.training_history = meta_data.get('training_history', {})
+            self.model_params = meta_data.get('model_params', {})
+        
+        # 加载PyTorch模型权重
+        weights_path = file_path.with_suffix('.pt')
+        if weights_path.exists():
+            self.model.load_state_dict(torch.load(weights_path, map_location=self.device))
+            self.is_trained = True
+            logger.info(f"BERT模型已从 {weights_path} 加载")
+        else:
+            raise FileNotFoundError(f"模型权重文件不存在: {weights_path}")

@@ -1,5 +1,5 @@
 {
-  "model_name": "traditional_svm",
+  "model_name": "traditional_gradient_boosting",
   "is_trained": true,
   "feature_names": [
     "text_length_feature",
@@ -46,11 +46,11 @@
   ],
   "training_history": {
     "train_accuracy": 1.0,
-    "val_accuracy": 0.25,
-    "model_type": "svm",
+    "val_accuracy": 1.0,
+    "model_type": "gradient_boosting",
     "model_params": {
-      "C": 1.0,
-      "kernel": "rbf"
+      "n_estimators": 100,
+      "learning_rate": 0.1
     }
   }
 }
