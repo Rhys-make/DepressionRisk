@@ -42,15 +42,32 @@
     "repeated_char_count",
     "repeated_word_count",
     "exclamation_density",
-    "question_density"
+    "question_density",
+    "turnaround_word_count",
+    "turnaround_pattern_count",
+    "turnaround_intensity",
+    "negative_first_sentence",
+    "positive_first_sentence",
+    "negative_last_sentence",
+    "positive_last_sentence",
+    "sentiment_turnaround",
+    "overall_sentiment"
   ],
   "training_history": {
-    "train_accuracy": 1.0,
-    "val_accuracy": 1.0,
+    "train_accuracy": 0.9166666666666666,
+    "val_accuracy": 0.75,
     "model_type": "random_forest",
     "model_params": {
-      "n_estimators": 100,
-      "max_depth": 10
-    }
-  }
-}
+      "n_estimators": 300,
+      "max_depth": 15,
+      "min_samples_split": 5,
+      "min_samples_leaf": 2,
+      "max_features": "sqrt",
+      "bootstrap": true,
+      "oob_score": true
+    },
+    "training_info": {
+      "feature_count": 50,
+      "sample_count": 12,
+      "class_distribution": {
+        "class_0": 

@@ -32,12 +32,44 @@ class FeatureExtractor:
             '社交退缩': ['alone', 'lonely', 'isolated', 'no_friends', 'avoid_people', 'loneliness']
         }
         
-        # 情感词汇
+        # 情感词汇（扩展版）
         self.emotion_words = {
-            'positive': ['happy', 'joy', 'excited', 'love', 'great', 'wonderful', 'amazing', 'fantastic', 'blessed', 'grateful', 'optimistic'],
-            'negative': ['sad', 'angry', 'frustrated', 'disappointed', 'hate', 'terrible', 'awful', 'horrible', 'hopeless', 'worthless', 'miserable'],
+            'positive': ['happy', 'joy', 'excited', 'love', 'great', 'wonderful', 'amazing', 'fantastic', 'blessed', 'grateful', 'optimistic', 'good', 'nice', 'perfect', 'awesome', 'brilliant', 'excellent', 'fixed', 'solved', 'better', 'relief', 'cheered', 'helped'],
+            'negative': ['sad', 'angry', 'frustrated', 'disappointed', 'hate', 'terrible', 'awful', 'horrible', 'hopeless', 'worthless', 'miserable', 'stressful', 'stress', 'anxiety', 'worried', 'scared', 'afraid', 'tired', 'exhausted', 'lonely', 'alone', 'useless', 'failure'],
             'neutral': ['okay', 'fine', 'normal', 'average', 'usual', 'regular']
         }
+        
+        # 转折词（新增）
+        self.turnaround_words = {
+            '但是', '不过', '然而', '可是', '只是', '不过', '但', 'yet', 'but', 'however',
+            'although', 'though', 'even though', 'despite', 'in spite of', 'while',
+            '虽然', '尽管', '即使', '就算', '哪怕', '纵然', '虽说', '虽说如此',
+            'lol', 'haha', '😅', '😊', '😋', '😄', '😂', '😆', '😉', '😎'
+        }
+        
+        # 情感转折模式（新增）
+        self.turnaround_patterns = [
+            r'但是.*?(开心|快乐|高兴|好|棒|赞|爽|舒服|轻松|放松|解决|修复|治愈|fixed|solved|better|relief)',
+            r'不过.*?(开心|快乐|高兴|好|棒|赞|爽|舒服|轻松|放松|解决|修复|治愈|fixed|solved|better|relief)',
+            r'然而.*?(开心|快乐|高兴|好|棒|赞|爽|舒服|轻松|放松|解决|修复|治愈|fixed|solved|better|relief)',
+            r'but.*?(happy|good|great|amazing|wonderful|fantastic|fixed|solved|better|relief|cheered|helped)',
+            r'however.*?(happy|good|great|amazing|wonderful|fantastic|fixed|solved|better|relief|cheered|helped)',
+            r'yet.*?(happy|good|great|amazing|wonderful|fantastic|fixed|solved|better|relief|cheered|helped)',
+            r'😩.*?(😊|😋|😄|😂|😆|😉|😎)',
+            r'😢.*?(😊|😋|😄|😂|😆|😉|😎)',
+            r'😭.*?(😊|😋|😄|😂|😆|😉|😎)',
+            r'😔.*?(😊|😋|😄|😂|😆|😉|😎)',
+            r'😞.*?(😊|😋|😄|😂|😆|😉|😎)',
+            r'😤.*?(😊|😋|😄|😂|😆|😉|😎)',
+            r'😫.*?(😊|😋|😄|😂|😆|😉|😎)',
+            r'😩.*?(lol|haha|😅|😊|😋|😄|😂|😆|😉|😎)',
+            r'😢.*?(lol|haha|😅|😊|😋|😄|😂|😆|😉|😎)',
+            r'😭.*?(lol|haha|😅|😊|😋|😄|😂|😆|😉|😎)',
+            r'😔.*?(lol|haha|😅|😊|😋|😄|😂|😆|😉|😎)',
+            r'😞.*?(lol|haha|😅|😊|😋|😄|😂|😆|😉|😎)',
+            r'😤.*?(lol|haha|😅|😊|😋|😄|😂|😆|😉|😎)',
+            r'😫.*?(lol|haha|😅|😊|😋|😄|😂|😆|😉|😎)'
+        ]
         
         # 标点符号模式
         self.punctuation_patterns = {
@@ -49,6 +81,7 @@ class FeatureExtractor:
         
         # 编译正则表达式
         self.compiled_patterns = {k: re.compile(v) for k, v in self.punctuation_patterns.items()}
+        self.compiled_turnaround_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in self.turnaround_patterns]
     
     def extract_linguistic_features(self, text: str) -> Dict[str, float]:
         """
@@ -212,6 +245,8 @@ class FeatureExtractor:
             features.update(self.extract_depression_features(text))
             features.update(self.extract_emotion_features(text))
             features.update(self.extract_social_media_features(text))
+            # 添加情感转折特征（新增）
+            features.update(self.extract_turnaround_features(text))
         except Exception as e:
             logger.error(f"特征提取失败: {e}")
             # 返回默认特征
@@ -233,6 +268,7 @@ class FeatureExtractor:
             default_features.update(self.extract_depression_features(sample_text))
             default_features.update(self.extract_emotion_features(sample_text))
             default_features.update(self.extract_social_media_features(sample_text))
+            default_features.update(self.extract_turnaround_features(sample_text))
             # 将所有值设为0
             return {k: 0.0 for k in default_features.keys()}
         except:
@@ -311,3 +347,100 @@ class FeatureExtractor:
                          for features in features_list])
         
         return array
+    
+    def extract_turnaround_features(self, text: str) -> Dict[str, float]:
+        """
+        提取情感转折特征（新增）
+        
+        Args:
+            text: 输入文本
+            
+        Returns:
+            情感转折特征字典
+        """
+        features = {}
+        text_lower = text.lower()
+        
+        # 转折词计数
+        turnaround_count = 0
+        for word in self.turnaround_words:
+            if word in text_lower:
+                turnaround_count += 1
+        features['turnaround_word_count'] = turnaround_count
+        
+        # 转折模式匹配
+        pattern_matches = 0
+        for pattern in self.compiled_turnaround_patterns:
+            if pattern.search(text_lower):
+                pattern_matches += 1
+        features['turnaround_pattern_count'] = pattern_matches
+        
+        # 转折强度（转折词数量 / 总词数）
+        total_words = len(text.split())
+        if total_words > 0:
+            features['turnaround_intensity'] = turnaround_count / total_words
+        else:
+            features['turnaround_intensity'] = 0.0
+        
+        # 情感变化分析
+        sentences = re.split(r'[.!?。！？]', text)
+        features['sentence_count'] = len([s for s in sentences if s.strip()])
+        
+        # 分析第一个和最后一个句子的情感
+        negative_first = 0
+        positive_first = 0
+        negative_last = 0
+        positive_last = 0
+        
+        if sentences:
+            first_sentence = sentences[0].lower()
+            last_sentence = sentences[-1].lower()
+            
+            # 第一个句子的情感
+            for word in self.emotion_words['negative']:
+                if word in first_sentence:
+                    negative_first += 1
+            for word in self.emotion_words['positive']:
+                if word in first_sentence:
+                    positive_first += 1
+            
+            # 最后一个句子的情感
+            for word in self.emotion_words['negative']:
+                if word in last_sentence:
+                    negative_last += 1
+            for word in self.emotion_words['positive']:
+                if word in last_sentence:
+                    positive_last += 1
+        
+        features['negative_first_sentence'] = negative_first
+        features['positive_first_sentence'] = positive_first
+        features['negative_last_sentence'] = negative_last
+        features['positive_last_sentence'] = positive_last
+        
+        # 情感变化方向
+        if negative_first > positive_first and positive_last > negative_last:
+            features['sentiment_turnaround'] = 1.0  # 负面转正面
+        elif positive_first > negative_first and negative_last > positive_last:
+            features['sentiment_turnaround'] = -1.0  # 正面转负面
+        else:
+            features['sentiment_turnaround'] = 0.0  # 无变化或同向
+        
+        # 整体情感倾向（考虑转折）
+        negative_count = sum(1 for word in self.emotion_words['negative'] if word in text_lower)
+        positive_count = sum(1 for word in self.emotion_words['positive'] if word in text_lower)
+        
+        if negative_count + positive_count > 0:
+            base_sentiment = (positive_count - negative_count) / (negative_count + positive_count)
+            
+            # 如果有转折词，调整情感分数
+            if turnaround_count > 0:
+                # 转折词越多，情感越偏向中性或正面
+                adjustment = min(turnaround_count * 0.2, 0.5)  # 最多调整0.5
+                adjusted_sentiment = base_sentiment + adjustment
+                features['overall_sentiment'] = max(-1.0, min(1.0, adjusted_sentiment))
+            else:
+                features['overall_sentiment'] = base_sentiment
+        else:
+            features['overall_sentiment'] = 0.0
+        
+        return features

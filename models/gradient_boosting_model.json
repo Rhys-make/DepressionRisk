@@ -42,7 +42,16 @@
     "repeated_char_count",
     "repeated_word_count",
     "exclamation_density",
-    "question_density"
+    "question_density",
+    "turnaround_word_count",
+    "turnaround_pattern_count",
+    "turnaround_intensity",
+    "negative_first_sentence",
+    "positive_first_sentence",
+    "negative_last_sentence",
+    "positive_last_sentence",
+    "sentiment_turnaround",
+    "overall_sentiment"
   ],
   "training_history": {
     "train_accuracy": 1.0,
