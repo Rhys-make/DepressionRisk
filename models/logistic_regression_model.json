@@ -42,7 +42,16 @@
     "repeated_char_count",
     "repeated_word_count",
     "exclamation_density",
-    "question_density"
+    "question_density",
+    "turnaround_word_count",
+    "turnaround_pattern_count",
+    "turnaround_intensity",
+    "negative_first_sentence",
+    "positive_first_sentence",
+    "negative_last_sentence",
+    "positive_last_sentence",
+    "sentiment_turnaround",
+    "overall_sentiment"
   ],
   "training_history": {
     "train_accuracy": 1.0,
@@ -50,6 +59,9 @@
     "model_type": "logistic_regression",
     "model_params": {
       "C": 1.0
-    }
-  }
-}
+    },
+    "training_info": {
+      "feature_count": 50,
+      "sample_count": 12,
+      "class_distribution": {
+        "class_0": 

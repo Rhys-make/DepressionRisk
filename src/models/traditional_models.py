@@ -97,8 +97,17 @@ class TraditionalModels(BaseModel):
             'train_accuracy': train_accuracy,
             'val_accuracy': val_accuracy,
             'model_type': self.model_type,
-            'model_params': self.model_params
+            'model_params': self.model_params,
+            'training_info': {
+                'feature_count': X_train.shape[1],
+                'sample_count': X_train.shape[0],
+                'class_distribution': {
+                    'class_0': np.sum(y_train == 0),
+                    'class_1': np.sum(y_train == 1)
+                }
+            }
         }
+        
         
         logger.info(f"模型训练完成 - 训练集准确率: {train_accuracy:.4f}")
         

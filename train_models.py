@@ -178,15 +178,23 @@ def create_models():
             'name': 'random_forest',
             'model_type': 'random_forest',
             'model_category': 'traditional',
-            'n_estimators': 100,
-            'max_depth': 10
+            'n_estimators': 300,        # 增加3倍
+            'max_depth': 15,            # 增加深度
+            'min_samples_split': 5,     # 控制分裂
+            'min_samples_leaf': 2,      # 控制叶子节点
+            'max_features': 'sqrt',     # 特征选择策略
+            'bootstrap': True,          # 启用bootstrap
+            'oob_score': True           # 启用OOB评分
         },
         {
             'name': 'svm',
             'model_type': 'svm',
             'model_category': 'traditional',
-            'C': 1.0,
-            'kernel': 'rbf'
+            'C': 10.0,                  # 增加正则化参数
+            'kernel': 'rbf',
+            'gamma': 'scale',           # 自动缩放gamma
+            'class_weight': 'balanced', # 处理类别不平衡
+            'probability': True         # 启用概率预测
         },
         {
             'name': 'logistic_regression',
@@ -198,8 +206,27 @@ def create_models():
             'name': 'gradient_boosting',
             'model_type': 'gradient_boosting',
             'model_category': 'traditional',
-            'n_estimators': 100,
-            'learning_rate': 0.1
+            'n_estimators': 500,        # 增加5倍，提升模型容量
+            'learning_rate': 0.05,      # 降低学习率，更精细的学习
+            'max_depth': 10,            # 增加树的深度
+            'subsample': 0.8,           # 随机采样，防止过拟合
+            'colsample_bytree': 0.8,    # 特征采样
+            'min_child_weight': 3,      # 控制叶子节点
+            'reg_alpha': 0.1,           # L1正则化
+            'reg_lambda': 0.1           # L2正则化
+        },
+        {
+            'name': 'gradient_boosting_advanced',
+            'model_type': 'gradient_boosting',
+            'model_category': 'traditional',
+            'n_estimators': 1000,       # 更多树
+            'learning_rate': 0.03,      # 更小的学习率
+            'max_depth': 12,            # 更深的树
+            'subsample': 0.7,           # 更激进的采样
+            'colsample_bytree': 0.7,    # 更激进的特征采样
+            'min_child_weight': 5,      # 更严格的叶子节点控制
+            'reg_alpha': 0.05,          # L1正则化
+            'reg_lambda': 0.05          # L2正则化
         }
     ]
     
