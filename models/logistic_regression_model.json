@@ -1,5 +1,5 @@
 {
-  "model_name": "traditional_svm",
+  "model_name": "traditional_logistic_regression",
   "is_trained": true,
   "feature_names": [
     "text_length_feature",
@@ -46,11 +46,10 @@
   ],
   "training_history": {
     "train_accuracy": 1.0,
-    "val_accuracy": 0.25,
-    "model_type": "svm",
+    "val_accuracy": 1.0,
+    "model_type": "logistic_regression",
     "model_params": {
-      "C": 1.0,
-      "kernel": "rbf"
+      "C": 1.0
     }
   }
 }

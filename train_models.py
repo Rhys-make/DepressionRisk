@@ -8,9 +8,45 @@
 import sys
 import os
 import logging
+import random
 import numpy as np
 import pandas as pd
 from pathlib import Path
+
+# 创建日志目录
+log_dir = Path('logs')
+log_dir.mkdir(exist_ok=True)
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_dir / 'training.log', encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+
+logger = logging.getLogger(__name__)
+
+# 设置随机种子以确保可重现性
+SEED = 42
+random.seed(SEED)
+np.random.seed(SEED)
+
+# 设置PyTorch随机种子（如果可用）
+try:
+    import torch
+    torch.manual_seed(SEED)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(SEED)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        logger.info(f"使用GPU: {torch.cuda.get_device_name(0)}")
+    else:
+        logger.warning("未检测到GPU，将使用CPU训练（可能很慢）")
+except ImportError:
+    logger.warning("PyTorch未安装，跳过BERT模型")
 
 # 添加src目录到路径
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
@@ -18,20 +54,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 from data_processing.preprocessor import DataProcessor
 from models.model_factory import ModelFactory, ModelManager
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('training.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
 
-logger = logging.getLogger(__name__)
-
-
-def load_and_preprocess_data(data_path: str = "data/raw/precise_training_data.csv"):
+def load_and_preprocess_data(data_path: str = "simple_sample_data_5000.csv"):
     """
     加载和预处理数据
     
@@ -62,28 +86,35 @@ def load_and_preprocess_data(data_path: str = "data/raw/precise_training_data.cs
     # 处理数据
     processed_data = processor.process_social_media_data(data)
     
-    # 创建训练测试分割
-    train_data, test_data = processor.create_train_test_split(processed_data, test_size=0.2)
+    # 创建训练/验证/测试分割 (60/20/20)
+    train_data, temp_data = processor.create_train_test_split(processed_data, test_size=0.4, random_state=42)
+    val_data, test_data = processor.create_train_test_split(temp_data, test_size=0.5, random_state=42)
     
     # 准备特征和标签
     X_train, y_train = processor.prepare_features(train_data, label_column='label', fit_scaler=True)
+    X_val, y_val = processor.prepare_features(val_data, label_column='label', fit_scaler=False)
     X_test, y_test = processor.prepare_features(test_data, label_column='label', fit_scaler=False)
     
     # 获取文本数据（用于BERT模型）
     train_texts = train_data['text'].tolist()
+    val_texts = val_data['text'].tolist()
     test_texts = test_data['text'].tolist()
     
     logger.info(f"数据预处理完成:")
     logger.info(f"  训练集: {X_train.shape}")
+    logger.info(f"  验证集: {X_val.shape}")
     logger.info(f"  测试集: {X_test.shape}")
     logger.info(f"  特征数量: {X_train.shape[1]}")
     
     return {
         'X_train': X_train,
         'y_train': y_train,
+        'X_val': X_val,
+        'y_val': y_val,
         'X_test': X_test,
         'y_test': y_test,
         'train_texts': train_texts,
+        'val_texts': val_texts,
         'test_texts': test_texts,
         'processor': processor
     }
@@ -127,6 +158,20 @@ def create_models():
     """创建要训练的模型"""
     logger.info("创建模型...")
     
+    # 检查PyTorch和GPU可用性
+    torch_available = False
+    gpu_available = False
+    try:
+        import torch
+        torch_available = True
+        gpu_available = torch.cuda.is_available()
+        if gpu_available:
+            logger.info(f"GPU可用: {torch.cuda.get_device_name(0)}")
+        else:
+            logger.warning("GPU不可用，BERT训练将很慢")
+    except ImportError:
+        logger.warning("PyTorch未安装，跳过BERT模型")
+    
     model_configs = [
         # 传统机器学习模型
         {
@@ -155,9 +200,12 @@ def create_models():
             'model_category': 'traditional',
             'n_estimators': 100,
             'learning_rate': 0.1
-        },
-        # BERT-Capsule模型（如果可用）
-        {
+        }
+    ]
+    
+    # 只有在PyTorch可用时才添加BERT模型
+    if torch_available:
+        model_configs.append({
             'name': 'bert_capsule',
             'model_type': 'bert_capsule',
             'model_category': 'deep',
@@ -165,12 +213,16 @@ def create_models():
             'symptom_capsules': 9,
             'capsule_dim': 16,
             'max_length': 256
-        }
-    ]
+        })
     
     models = {}
     for config in model_configs:
         try:
+            # 对于BERT模型，检查资源
+            if config['model_type'] == 'bert_capsule' and not gpu_available:
+                logger.warning(f"跳过BERT模型 {config['name']}：需要GPU或大量CPU时间")
+                continue
+                
             model = ModelFactory.create_model(
                 model_type=config['model_type'],
                 model_category=config['model_category'],
@@ -194,12 +246,12 @@ def train_models(models, data):
         logger.info(f"训练模型: {name}")
         try:
             # 检查模型类型，决定训练方式
-            if hasattr(model, 'bert_model_name'):  # BERT模型
+            if getattr(model, 'uses_text', False) or hasattr(model, 'bert_model_name'):  # 文本模型
                 history = model.train(
                     texts=data['train_texts'],
                     y_train=data['y_train'],
-                    val_texts=data['test_texts'],
-                    y_val=data['y_test'],
+                    val_texts=data['val_texts'],  # 使用验证集而不是测试集
+                    y_val=data['y_val'],
                     epochs=5,
                     batch_size=8,
                     learning_rate=2e-5
@@ -208,8 +260,8 @@ def train_models(models, data):
                 history = model.train(
                     X_train=data['X_train'],
                     y_train=data['y_train'],
-                    X_val=data['X_test'],
-                    y_val=data['y_test']
+                    X_val=data['X_val'],  # 使用验证集而不是测试集
+                    y_val=data['y_val']
                 )
             
             training_results[name] = {
@@ -242,7 +294,7 @@ def evaluate_models(models, data):
         logger.info(f"评估模型: {name}")
         try:
             # 检查模型类型，决定评估方式
-            if hasattr(model, 'bert_model_name'):  # BERT模型
+            if getattr(model, 'uses_text', False) or hasattr(model, 'bert_model_name'):  # 文本模型
                 metrics = model.evaluate(data['test_texts'], data['y_test'])
             else:  # 传统模型
                 metrics = model.evaluate(data['X_test'], data['y_test'])
@@ -274,10 +326,27 @@ def print_results(training_results, evaluation_results):
     for name, result in training_results.items():
         if result['success']:
             history = result['history']
-            if 'train_accuracy' in history:
-                logger.info(f"  {name}: 训练准确率 = {history['train_accuracy']:.4f}")
-            if 'val_accuracy' in history and history['val_accuracy'] is not None:
-                logger.info(f"  {name}: 验证准确率 = {history['val_accuracy']:.4f}")
+            # 统一处理训练历史格式
+            train_acc = None
+            val_acc = None
+            
+            # 处理不同的历史格式
+            if isinstance(history, dict):
+                if 'train_accuracy' in history:
+                    train_acc = history['train_accuracy']
+                elif 'accuracy' in history:
+                    train_acc = history['accuracy']
+                
+                if 'val_accuracy' in history and history['val_accuracy'] is not None:
+                    val_acc = history['val_accuracy']
+                elif 'validation_accuracy' in history:
+                    val_acc = history['validation_accuracy']
+            
+            # 打印结果
+            if train_acc is not None:
+                logger.info(f"  {name}: 训练准确率 = {train_acc:.4f}")
+            if val_acc is not None:
+                logger.info(f"  {name}: 验证准确率 = {val_acc:.4f}")
         else:
             logger.info(f"  {name}: 训练失败 - {result['error']}")
     
@@ -295,19 +364,34 @@ def print_results(training_results, evaluation_results):
         else:
             logger.info(f"  {name}: 评估失败 - {result['error']}")
     
-    # 找出最佳模型
+    # 找出最佳模型（基于验证集性能）
     best_model = None
     best_score = -1
     
-    for name, result in evaluation_results.items():
+    for name, result in training_results.items():
         if result['success']:
-            score = result['metrics']['accuracy']
-            if score > best_score:
+            history = result['history']
+            score = None
+            
+            # 优先使用验证集准确率
+            if isinstance(history, dict):
+                if 'val_accuracy' in history and history['val_accuracy'] is not None:
+                    score = history['val_accuracy']
+                elif 'validation_accuracy' in history:
+                    score = history['validation_accuracy']
+                elif 'train_accuracy' in history:
+                    score = history['train_accuracy']
+                elif 'accuracy' in history:
+                    score = history['accuracy']
+            
+            if score is not None and score > best_score:
                 best_score = score
                 best_model = name
     
     if best_model:
-        logger.info(f"\n最佳模型: {best_model} (准确率: {best_score:.4f})")
+        logger.info(f"\n最佳模型: {best_model} (验证准确率: {best_score:.4f})")
+    else:
+        logger.info(f"\n无法确定最佳模型（缺少验证准确率）")
 
 
 def save_models(models, processor, output_dir: str = "models"):
