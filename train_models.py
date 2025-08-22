@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-模型训练主脚本
-训练和比较不同类型的抑郁风险预测模型
+BERT模型训练主脚本
+训练抑郁风险预测BERT模型
 """
 
 import sys
@@ -46,7 +46,8 @@ try:
     else:
         logger.warning("未检测到GPU，将使用CPU训练（可能很慢）")
 except ImportError:
-    logger.warning("PyTorch未安装，跳过BERT模型")
+    logger.error("PyTorch未安装，无法使用BERT模型")
+    sys.exit(1)
 
 # 添加src目录到路径
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
@@ -55,7 +56,7 @@ from data_processing.preprocessor import DataProcessor
 from models.model_factory import ModelFactory, ModelManager
 
 
-def load_and_preprocess_data(data_path: str = "simple_sample_data_5000.csv"):
+def load_and_preprocess_data(data_path: str = "data/raw/simple_sample_data_5000.csv"):
     """
     加载和预处理数据
     
@@ -90,32 +91,28 @@ def load_and_preprocess_data(data_path: str = "simple_sample_data_5000.csv"):
     train_data, temp_data = processor.create_train_test_split(processed_data, test_size=0.4, random_state=42)
     val_data, test_data = processor.create_train_test_split(temp_data, test_size=0.5, random_state=42)
     
-    # 准备特征和标签
-    X_train, y_train = processor.prepare_features(train_data, label_column='label', fit_scaler=True)
-    X_val, y_val = processor.prepare_features(val_data, label_column='label', fit_scaler=False)
-    X_test, y_test = processor.prepare_features(test_data, label_column='label', fit_scaler=False)
-    
     # 获取文本数据（用于BERT模型）
     train_texts = train_data['text'].tolist()
     val_texts = val_data['text'].tolist()
     test_texts = test_data['text'].tolist()
     
+    # 获取标签
+    y_train = train_data['label'].values
+    y_val = val_data['label'].values
+    y_test = test_data['label'].values
+    
     logger.info(f"数据预处理完成:")
-    logger.info(f"  训练集: {X_train.shape}")
-    logger.info(f"  验证集: {X_val.shape}")
-    logger.info(f"  测试集: {X_test.shape}")
-    logger.info(f"  特征数量: {X_train.shape[1]}")
+    logger.info(f"  训练集: {len(train_texts)} 样本")
+    logger.info(f"  验证集: {len(val_texts)} 样本")
+    logger.info(f"  测试集: {len(test_texts)} 样本")
     
     return {
-        'X_train': X_train,
-        'y_train': y_train,
-        'X_val': X_val,
-        'y_val': y_val,
-        'X_test': X_test,
-        'y_test': y_test,
         'train_texts': train_texts,
         'val_texts': val_texts,
         'test_texts': test_texts,
+        'y_train': y_train,
+        'y_val': y_val,
+        'y_test': y_test,
         'processor': processor
     }
 
@@ -155,8 +152,8 @@ def create_sample_data():
 
 
 def create_models():
-    """创建要训练的模型"""
-    logger.info("创建模型...")
+    """创建要训练的BERT模型"""
+    logger.info("创建BERT模型...")
     
     # 检查PyTorch和GPU可用性
     torch_available = False
@@ -170,90 +167,48 @@ def create_models():
         else:
             logger.warning("GPU不可用，BERT训练将很慢")
     except ImportError:
-        logger.warning("PyTorch未安装，跳过BERT模型")
+        logger.error("PyTorch未安装，无法使用BERT模型")
+        return {}
     
     model_configs = [
-        # 传统机器学习模型
         {
-            'name': 'random_forest',
-            'model_type': 'random_forest',
-            'model_category': 'traditional',
-            'n_estimators': 300,        # 增加3倍
-            'max_depth': 15,            # 增加深度
-            'min_samples_split': 5,     # 控制分裂
-            'min_samples_leaf': 2,      # 控制叶子节点
-            'max_features': 'sqrt',     # 特征选择策略
-            'bootstrap': True,          # 启用bootstrap
-            'oob_score': True           # 启用OOB评分
-        },
-        {
-            'name': 'svm',
-            'model_type': 'svm',
-            'model_category': 'traditional',
-            'C': 10.0,                  # 增加正则化参数
-            'kernel': 'rbf',
-            'gamma': 'scale',           # 自动缩放gamma
-            'class_weight': 'balanced', # 处理类别不平衡
-            'probability': True         # 启用概率预测
-        },
-        {
-            'name': 'logistic_regression',
-            'model_type': 'logistic_regression',
-            'model_category': 'traditional',
-            'C': 1.0
-        },
-        {
-            'name': 'gradient_boosting',
-            'model_type': 'gradient_boosting',
-            'model_category': 'traditional',
-            'n_estimators': 500,        # 增加5倍，提升模型容量
-            'learning_rate': 0.05,      # 降低学习率，更精细的学习
-            'max_depth': 10,            # 增加树的深度
-            'subsample': 0.8,           # 随机采样，防止过拟合
-            'colsample_bytree': 0.8,    # 特征采样
-            'min_child_weight': 3,      # 控制叶子节点
-            'reg_alpha': 0.1,           # L1正则化
-            'reg_lambda': 0.1           # L2正则化
-        },
-        {
-            'name': 'gradient_boosting_advanced',
-            'model_type': 'gradient_boosting',
-            'model_category': 'traditional',
-            'n_estimators': 1000,       # 更多树
-            'learning_rate': 0.03,      # 更小的学习率
-            'max_depth': 12,            # 更深的树
-            'subsample': 0.7,           # 更激进的采样
-            'colsample_bytree': 0.7,    # 更激进的特征采样
-            'min_child_weight': 5,      # 更严格的叶子节点控制
-            'reg_alpha': 0.05,          # L1正则化
-            'reg_lambda': 0.05          # L2正则化
-        }
-    ]
-    
-    # 只有在PyTorch可用时才添加BERT模型
-    if torch_available:
-        model_configs.append({
             'name': 'bert_capsule',
             'model_type': 'bert_capsule',
-            'model_category': 'deep',
             'bert_model_name': 'bert-base-uncased',
-            'symptom_capsules': 9,
-            'capsule_dim': 16,
-            'max_length': 256
-        })
+            'symptom_capsules': 12,        # 症状胶囊数量
+            'capsule_dim': 32,             # 胶囊维度
+            'max_length': 512,             # 最大长度
+            'dropout': 0.2,                # dropout
+            'num_iterations': 5            # 路由迭代次数
+        },
+        {
+            'name': 'bert_capsule_advanced',
+            'model_type': 'bert_capsule',
+            'bert_model_name': 'bert-base-uncased',
+            'symptom_capsules': 16,        # 更多症状胶囊
+            'capsule_dim': 64,             # 更大胶囊维度
+            'max_length': 512,             # 最大长度
+            'dropout': 0.3,                # 更高dropout
+            'num_iterations': 7,           # 更多路由迭代
+            'use_contrastive_loss': True   # 启用对比学习
+        }
+    ]
     
     models = {}
     for config in model_configs:
         try:
-            # 对于BERT模型，检查资源
-            if config['model_type'] == 'bert_capsule' and not gpu_available:
-                logger.warning(f"跳过BERT模型 {config['name']}：需要GPU或大量CPU时间")
-                continue
+            # 如果没有GPU，使用更轻量的配置
+            if not gpu_available:
+                logger.warning(f"在CPU上创建BERT模型 {config['name']}（训练将很慢）")
+                # 为CPU训练调整配置
+                config = config.copy()  # 复制配置避免修改原始配置
+                config['max_length'] = 128  # 减少序列长度
+                config['symptom_capsules'] = min(config.get('symptom_capsules', 8), 8)  # 减少胶囊数
+                config['capsule_dim'] = min(config.get('capsule_dim', 16), 16)  # 减少胶囊维度
                 
             model = ModelFactory.create_model(
                 model_type=config['model_type'],
-                model_category=config['model_category'],
-                **{k: v for k, v in config.items() if k not in ['name', 'model_type', 'model_category']}
+                **{k: v for k, v in config.items() if k not in ['name', 'model_type']}
             )
             models[config['name']] = model
             logger.info(f"成功创建模型: {config['name']}")
@@ -264,32 +219,42 @@ def create_models():
 
 
 def train_models(models, data):
-    """训练所有模型"""
-    logger.info("开始训练模型...")
+    """训练所有BERT模型"""
+    logger.info("开始训练BERT模型...")
     
     training_results = {}
     
     for name, model in models.items():
         logger.info(f"训练模型: {name}")
         try:
-            # 检查模型类型，决定训练方式
-            if getattr(model, 'uses_text', False) or hasattr(model, 'bert_model_name'):  # 文本模型
-                history = model.train(
-                    texts=data['train_texts'],
-                    y_train=data['y_train'],
-                    val_texts=data['val_texts'],  # 使用验证集而不是测试集
-                    y_val=data['y_val'],
-                    epochs=5,
-                    batch_size=8,
-                    learning_rate=2e-5
-                )
-            else:  # 传统模型
-                history = model.train(
-                    X_train=data['X_train'],
-                    y_train=data['y_train'],
-                    X_val=data['X_val'],  # 使用验证集而不是测试集
-                    y_val=data['y_val']
-                )
+            # 检查是否有GPU，调整训练参数
+            import torch
+            gpu_available = torch.cuda.is_available()
+            
+            if gpu_available:
+                # GPU训练参数
+                epochs = 15
+                batch_size = 16
+                learning_rate = 3e-5
+            else:
+                # CPU训练参数（更轻量）
+                epochs = 5  # 减少训练轮数
+                batch_size = 4  # 减少批次大小
+                learning_rate = 5e-5  # 稍微提高学习率
+                logger.info(f"使用CPU训练参数: epochs={epochs}, batch_size={batch_size}")
+            
+            history = model.train(
+                texts=data['train_texts'],
+                y_train=data['y_train'],
+                val_texts=data['val_texts'],
+                y_val=data['y_val'],
+                epochs=epochs,               # 动态调整的训练轮数
+                batch_size=batch_size,       # 动态调整的批次大小
+                learning_rate=learning_rate, # 动态调整的学习率
+                weight_decay=0.01,           # 权重衰减
+                warmup_steps=50,             # 减少预热步数
+                early_stopping_patience=5    # 减少早停耐心
+            )
             
             training_results[name] = {
                 'success': True,
@@ -308,8 +273,8 @@ def train_models(models, data):
 
 
 def evaluate_models(models, data):
-    """评估所有模型"""
-    logger.info("开始评估模型...")
+    """评估所有BERT模型"""
+    logger.info("开始评估BERT模型...")
     
     evaluation_results = {}
     
@@ -320,11 +285,7 @@ def evaluate_models(models, data):
         
         logger.info(f"评估模型: {name}")
         try:
-            # 检查模型类型，决定评估方式
-            if getattr(model, 'uses_text', False) or hasattr(model, 'bert_model_name'):  # 文本模型
-                metrics = model.evaluate(data['test_texts'], data['y_test'])
-            else:  # 传统模型
-                metrics = model.evaluate(data['X_test'], data['y_test'])
+            metrics = model.evaluate(data['test_texts'], data['y_test'])
             
             evaluation_results[name] = {
                 'success': True,
@@ -345,7 +306,7 @@ def evaluate_models(models, data):
 def print_results(training_results, evaluation_results):
     """打印训练和评估结果"""
     logger.info("=" * 60)
-    logger.info("训练和评估结果汇总")
+    logger.info("BERT模型训练和评估结果汇总")
     logger.info("=" * 60)
     
     # 训练结果
@@ -422,8 +383,8 @@ def print_results(training_results, evaluation_results):
 
 
 def save_models(models, processor, output_dir: str = "models"):
-    """保存训练好的模型和数据处理器"""
-    logger.info("保存模型...")
+    """保存训练好的BERT模型和数据处理器"""
+    logger.info("保存BERT模型...")
     
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True)
@@ -440,9 +401,6 @@ def save_models(models, processor, output_dir: str = "models"):
     for name, model in models.items():
         if model.is_trained:
             try:
-                # 若模型尚未记录特征名，则从处理器补齐
-                if getattr(model, 'feature_names', None) in (None, []):
-                    model.feature_names = processor.feature_columns or processor.feature_names
                 model_path = output_path / f"{name}_model.pkl"
                 model.save_model(model_path)
                 logger.info(f"模型 {name} 已保存到 {model_path}")
@@ -452,16 +410,16 @@ def save_models(models, processor, output_dir: str = "models"):
 
 def main():
     """主函数"""
-    logger.info("开始模型训练流程")
+    logger.info("开始BERT模型训练流程")
     
     # 1. 加载和预处理数据
     data = load_and_preprocess_data()
     
-    # 2. 创建模型
+    # 2. 创建BERT模型
     models = create_models()
     
     if not models:
-        logger.error("没有成功创建任何模型")
+        logger.error("没有成功创建任何BERT模型")
         return
     
     # 3. 训练模型
@@ -476,7 +434,7 @@ def main():
     # 6. 保存模型
     save_models(models, data['processor'])
     
-    logger.info("模型训练流程完成")
+    logger.info("BERT模型训练流程完成")
 
 
 if __name__ == "__main__":

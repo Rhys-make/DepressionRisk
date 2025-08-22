@@ -216,7 +216,19 @@ class BertCapsuleModel(nn.Module):
     def forward(self, input_ids, attention_mask, labels=None):
         # BERT编码
         bert_outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
-        pooled_output = bert_outputs.pooler_output  # (batch_size, hidden_size)
+        
+        # 处理不同类型的BERT输出
+        if hasattr(bert_outputs, 'pooler_output') and bert_outputs.pooler_output is not None:
+            # 标准BERT有pooler_output
+            pooled_output = bert_outputs.pooler_output  # (batch_size, hidden_size)
+        else:
+            # DistilBERT等模型没有pooler_output，使用平均池化
+            last_hidden_state = bert_outputs.last_hidden_state  # (batch_size, seq_len, hidden_size)
+            # 使用attention_mask进行平均池化
+            mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+            sum_embeddings = torch.sum(last_hidden_state * mask_expanded, 1)
+            sum_mask = torch.clamp(mask_expanded.sum(1), min=1e-9)
+            pooled_output = sum_embeddings / sum_mask  # (batch_size, hidden_size)
         
         # 特征投影
         features = self.feature_projection(pooled_output)
@@ -287,8 +299,19 @@ class BertCapsuleWrapper(BaseModel):
         
     def _initialize_model(self):
         """初始化模型"""
+        # 确保使用正确的BERT模型名称
+        if 'distilbert' in self.bert_model_name.lower():
+            # 对于DistilBERT，确保使用正确的模型名称
+            if self.bert_model_name == 'distilbert-base-uncased':
+                bert_model_name = 'distilbert-base-uncased'
+            else:
+                bert_model_name = self.bert_model_name
+        else:
+            # 对于标准BERT，使用标准名称
+            bert_model_name = self.bert_model_name
+        
         self.model = BertCapsuleModel(
-            bert_model_name=self.bert_model_name,
+            bert_model_name=bert_model_name,
             symptom_capsules=self.symptom_capsules,
             capsule_dim=self.capsule_dim,
             num_classes=self.num_classes,
@@ -502,8 +525,8 @@ class BertCapsuleWrapper(BaseModel):
             'is_trained': self.is_trained,
             'feature_names': self.feature_names,
             'training_history': self.training_history,
-            'model_params': self.model_params,
-            'bert_model_name': self.bert_model_name,
+            'model_params': getattr(self, 'model_params', {}),
+            'bert_model_name': getattr(self, 'bert_model_name', 'distilbert-base-uncased'),
             'weights_path': str(weights_path)
         }
         
@@ -511,15 +534,33 @@ class BertCapsuleWrapper(BaseModel):
         with open(meta_path, 'w', encoding='utf-8') as f:
             json.dump(meta_data, f, ensure_ascii=False, indent=2)
         
-        logger.info(f"BERT模型已保存到: {weights_path} 和 {meta_path}")
+        # 同时保存pickle格式以保持兼容性
+        pkl_data = {
+            'model_name': self.model_name,
+            'is_trained': self.is_trained,
+            'feature_names': self.feature_names,
+            'training_history': self.training_history,
+            'model_params': getattr(self, 'model_params', {}),
+            'bert_model_name': getattr(self, 'bert_model_name', 'distilbert-base-uncased'),
+            'weights_path': str(weights_path)
+        }
+        
+        import pickle
+        with open(file_path, 'wb') as f:
+            pickle.dump(pkl_data, f)
+        
+        logger.info(f"BERT模型已保存到: {weights_path} 和 {meta_path} 和 {file_path}")
     
     def load_model(self, file_path):
         """加载模型"""
         file_path = Path(file_path)
         
-        # 加载模型元数据
+        # 尝试加载.pt + .meta.json格式
         meta_path = file_path.with_suffix('.meta.json')
-        if meta_path.exists():
+        weights_path = file_path.with_suffix('.pt')
+        
+        if meta_path.exists() and weights_path.exists():
+            # 加载模型元数据
             import json
             with open(meta_path, 'r', encoding='utf-8') as f:
                 meta_data = json.load(f)
@@ -529,12 +570,78 @@ class BertCapsuleWrapper(BaseModel):
             self.feature_names = meta_data.get('feature_names')
             self.training_history = meta_data.get('training_history', {})
             self.model_params = meta_data.get('model_params', {})
+            self.bert_model_name = meta_data.get('bert_model_name', 'distilbert-base-uncased')
+            
+            # 重新初始化模型以确保结构一致
+            self._initialize_model()
+            
+            # 加载PyTorch模型权重
+            try:
+                state_dict = torch.load(weights_path, map_location=self.device)
+                # 尝试加载权重，如果失败则使用strict=False
+                try:
+                    self.model.load_state_dict(state_dict, strict=True)
+                    logger.info(f"BERT模型已从 {weights_path} 加载（严格模式）")
+                except Exception as e:
+                    logger.warning(f"严格加载失败，尝试宽松加载: {e}")
+                    # 尝试宽松加载，忽略不匹配的键
+                    missing_keys, unexpected_keys = self.model.load_state_dict(state_dict, strict=False)
+                    if missing_keys:
+                        logger.warning(f"缺失的键: {missing_keys[:5]}...")  # 只显示前5个
+                    if unexpected_keys:
+                        logger.warning(f"意外的键: {unexpected_keys[:5]}...")  # 只显示前5个
+                    logger.info(f"BERT模型已从 {weights_path} 加载（宽松模式）")
+                
+                self.is_trained = True
+            except Exception as e:
+                logger.warning(f"加载权重失败，可能需要重新训练: {e}")
+                self.is_trained = False
+            return
         
-        # 加载PyTorch模型权重
-        weights_path = file_path.with_suffix('.pt')
-        if weights_path.exists():
-            self.model.load_state_dict(torch.load(weights_path, map_location=self.device))
-            self.is_trained = True
-            logger.info(f"BERT模型已从 {weights_path} 加载")
-        else:
-            raise FileNotFoundError(f"模型权重文件不存在: {weights_path}")
+        # 尝试加载.pkl格式（兼容旧版本）
+        if file_path.exists():
+            import pickle
+            with open(file_path, 'rb') as f:
+                model_data = pickle.load(f)
+            
+            # 从pickle数据中提取信息
+            self.model_name = model_data.get('model_name', 'bert_capsule_model')
+            self.is_trained = model_data.get('is_trained', False)
+            self.training_history = model_data.get('training_history', {})
+            self.feature_names = model_data.get('feature_names')
+            self.model_params = model_data.get('model_params', {})
+            self.bert_model_name = model_data.get('bert_model_name', 'distilbert-base-uncased')
+            
+            # 重新初始化模型以确保结构一致
+            self._initialize_model()
+            
+            # 检查是否有权重文件路径
+            weights_path = model_data.get('weights_path')
+            if weights_path and Path(weights_path).exists():
+                try:
+                    # 加载PyTorch模型权重
+                    state_dict = torch.load(weights_path, map_location=self.device)
+                    # 尝试加载权重，如果失败则使用strict=False
+                    try:
+                        self.model.load_state_dict(state_dict, strict=True)
+                        logger.info(f"BERT模型已从 {weights_path} 加载（严格模式）")
+                    except Exception as e:
+                        logger.warning(f"严格加载失败，尝试宽松加载: {e}")
+                        # 尝试宽松加载，忽略不匹配的键
+                        missing_keys, unexpected_keys = self.model.load_state_dict(state_dict, strict=False)
+                        if missing_keys:
+                            logger.warning(f"缺失的键: {missing_keys[:5]}...")  # 只显示前5个
+                        if unexpected_keys:
+                            logger.warning(f"意外的键: {unexpected_keys[:5]}...")  # 只显示前5个
+                        logger.info(f"BERT模型已从 {weights_path} 加载（宽松模式）")
+                    
+                    self.is_trained = True
+                except Exception as e:
+                    logger.warning(f"加载权重失败，可能需要重新训练: {e}")
+                    self.is_trained = False
+            else:
+                logger.warning("没有找到权重文件，模型可能需要重新训练")
+            
+            return
+        
+        raise FileNotFoundError(f"模型文件不存在: {file_path}")

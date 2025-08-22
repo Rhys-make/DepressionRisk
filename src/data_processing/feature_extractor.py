@@ -18,25 +18,116 @@ class FeatureExtractor:
     
     def __init__(self):
         """初始化特征提取器"""
-        # 抑郁相关词汇（基于PHQ-9问卷）
+        # 抑郁相关词汇（基于PHQ-9问卷，扩展社交媒体表达）
         self.depression_keywords = {
-            '情绪低落': ['sad', 'depressed', 'down', 'blue', 'unhappy', 'miserable', 'hopeless', 'sadness', 'depression'],
-            '兴趣丧失': ['uninterested', 'bored', 'no_interest', 'nothing_matters', 'empty', 'meaningless', 'pointless'],
-            '睡眠问题': ['insomnia', 'sleep', 'tired', 'exhausted', 'fatigue', 'restless', 'cant_sleep', 'sleepless'],
-            '食欲变化': ['appetite', 'hungry', 'not_hungry', 'weight_loss', 'weight_gain', 'eating'],
-            '注意力问题': ['concentrate', 'focus', 'attention', 'distracted', 'mind_wandering', 'racing_thoughts'],
-            '自我评价': ['worthless', 'failure', 'useless', 'guilty', 'blame_myself', 'hate_myself', 'disappointment'],
-            '自杀想法': ['suicide', 'kill_myself', 'death', 'die', 'end_it_all', 'better_off_dead', 'want_to_die', 'end_my_life'],
-            '焦虑症状': ['anxious', 'worried', 'nervous', 'panic', 'fear', 'stress', 'anxiety'],
-            '身体症状': ['pain', 'ache', 'sick', 'ill', 'headache', 'stomach', 'hurting'],
-            '社交退缩': ['alone', 'lonely', 'isolated', 'no_friends', 'avoid_people', 'loneliness']
+            '情绪低落': [
+                'sad', 'depressed', 'down', 'blue', 'unhappy', 'miserable', 'hopeless', 'sadness', 'depression',
+                'drowning', 'sinking', 'drowning', 'suffocating', 'dying inside', 'dead inside', 'empty inside',
+                'numb', 'feeling nothing', 'emotionally dead', 'broken', 'shattered', 'crushed', 'devastated',
+                'heartbroken', 'soul crushing', 'mentally exhausted', 'emotionally drained', 'spirit broken',
+                'feeling low', 'feeling down', 'feeling blue', 'feeling empty', 'feeling lost', 'feeling alone',
+                'feeling worthless', 'feeling useless', 'feeling like a failure', 'feeling like a burden',
+                'feeling like nobody cares', 'feeling like giving up', 'feeling like ending it all'
+            ],
+            '兴趣丧失': [
+                'uninterested', 'bored', 'no_interest', 'nothing_matters', 'empty', 'meaningless', 'pointless',
+                'cant enjoy anything', 'nothing brings joy', 'nothing makes me happy', 'everything feels dull',
+                'life is boring', 'life is meaningless', 'life has no purpose', 'life is pointless',
+                'dont care about anything', 'dont want to do anything', 'dont feel like doing anything',
+                'everything feels like a chore', 'nothing excites me', 'nothing motivates me',
+                'lost interest in everything', 'lost passion', 'lost motivation', 'lost drive'
+            ],
+            '睡眠问题': [
+                'insomnia', 'sleep', 'tired', 'exhausted', 'fatigue', 'restless', 'cant_sleep', 'sleepless',
+                'cant fall asleep', 'wake up in the middle of the night', 'sleep all day', 'oversleeping',
+                'sleeping too much', 'sleeping too little', 'sleep problems', 'sleep issues',
+                'mind racing at night', 'thoughts keeping me awake', 'anxiety keeping me awake',
+                'depression keeping me awake', 'worrying all night', 'cant turn off my brain'
+            ],
+            '食欲变化': [
+                'appetite', 'hungry', 'not_hungry', 'weight_loss', 'weight_gain', 'eating',
+                'lost appetite', 'no appetite', 'dont feel like eating', 'forgetting to eat',
+                'eating too much', 'emotional eating', 'stress eating', 'comfort eating',
+                'food doesnt taste good', 'food has no flavor', 'eating alone', 'eating in bed'
+            ],
+            '注意力问题': [
+                'concentrate', 'focus', 'attention', 'distracted', 'mind_wandering', 'racing_thoughts',
+                'cant focus', 'cant concentrate', 'mind keeps wandering', 'thoughts all over the place',
+                'brain fog', 'mental fog', 'cant think clearly', 'thoughts are scattered',
+                'overthinking', 'ruminating', 'obsessive thoughts', 'intrusive thoughts',
+                'mind wont stop', 'brain wont shut off', 'constant worrying', 'endless thoughts'
+            ],
+            '自我评价': [
+                'worthless', 'failure', 'useless', 'guilty', 'blame_myself', 'hate_myself', 'disappointment',
+                'im a failure', 'im worthless', 'im useless', 'im a burden', 'im a disappointment',
+                'im a waste of space', 'im a waste of oxygen', 'im a mistake', 'im a loser',
+                'im not good enough', 'im not smart enough', 'im not pretty enough', 'im not worthy',
+                'im a bad person', 'im a terrible person', 'im a horrible person', 'im a monster',
+                'im a piece of shit', 'im garbage', 'im trash', 'im nothing', 'im nobody',
+                'im invisible', 'im replaceable', 'im disposable', 'im forgettable'
+            ],
+            '自杀想法': [
+                'suicide', 'kill_myself', 'death', 'die', 'end_it_all', 'better_off_dead', 'want_to_die', 'end_my_life',
+                'want to die', 'want to end it all', 'want to kill myself', 'want to end my life',
+                'thinking about suicide', 'thinking about death', 'thinking about dying',
+                'wish i was dead', 'wish i could die', 'wish i was never born', 'wish i didnt exist',
+                'life is not worth living', 'life has no value', 'life is meaningless',
+                'everyone would be better off without me', 'nobody would miss me', 'nobody would care',
+                'im better off dead', 'im better off not existing', 'im better off gone',
+                'ending it all', 'ending my life', 'ending my suffering', 'ending my pain'
+            ],
+            '焦虑症状': [
+                'anxious', 'worried', 'nervous', 'panic', 'fear', 'stress', 'anxiety',
+                'constant anxiety', 'constant worry', 'constant fear', 'constant stress',
+                'panic attacks', 'anxiety attacks', 'feeling overwhelmed', 'feeling suffocated',
+                'feeling trapped', 'feeling stuck', 'feeling helpless', 'feeling hopeless',
+                'feeling powerless', 'feeling out of control', 'feeling like im losing my mind',
+                'feeling like im going crazy', 'feeling like im losing it', 'feeling like im breaking'
+            ],
+            '身体症状': [
+                'pain', 'ache', 'sick', 'ill', 'headache', 'stomach', 'hurting',
+                'constant pain', 'chronic pain', 'body aches', 'muscle pain', 'joint pain',
+                'chest pain', 'heart pain', 'emotional pain', 'mental pain', 'psychological pain',
+                'feeling sick', 'feeling ill', 'feeling unwell', 'feeling like im dying',
+                'feeling like my body is shutting down', 'feeling like im falling apart'
+            ],
+            '社交退缩': [
+                'alone', 'lonely', 'isolated', 'no_friends', 'avoid_people', 'loneliness',
+                'feeling alone', 'feeling lonely', 'feeling isolated', 'feeling disconnected',
+                'feeling like nobody understands', 'feeling like nobody gets me', 'feeling like an outsider',
+                'feeling like i dont belong', 'feeling like im different', 'feeling like im weird',
+                'avoiding people', 'avoiding social situations', 'avoiding friends', 'avoiding family',
+                'pushing people away', 'pushing everyone away', 'pushing loved ones away',
+                'nobody wants to be around me', 'nobody likes me', 'nobody cares about me',
+                'im a burden to others', 'im annoying to others', 'im toxic to others'
+            ],
+            '伪装症状': [
+                'fake smile', 'fakesmile', 'fake happy', 'pretending to be happy', 'pretending to be fine',
+                'putting on a mask', 'wearing a mask', 'hiding my pain', 'hiding my sadness',
+                'hiding my depression', 'hiding my anxiety', 'hiding my struggles', 'hiding my problems',
+                'everyone thinks im fine', 'everyone thinks im happy', 'everyone thinks im okay',
+                'nobody knows how i really feel', 'nobody knows my pain', 'nobody knows my struggles',
+                'im good at pretending', 'im good at faking', 'im good at hiding', 'im good at masking',
+                'smiling through the pain', 'laughing through the tears', 'happy on the outside, dying inside',
+                'fine on the outside, broken inside', 'okay on the outside, not okay inside'
+            ]
         }
         
-        # 情感词汇（扩展版）
+        # 情感词汇（扩展版，包含社交媒体表达）
         self.emotion_words = {
-            'positive': ['happy', 'joy', 'excited', 'love', 'great', 'wonderful', 'amazing', 'fantastic', 'blessed', 'grateful', 'optimistic', 'good', 'nice', 'perfect', 'awesome', 'brilliant', 'excellent', 'fixed', 'solved', 'better', 'relief', 'cheered', 'helped'],
-            'negative': ['sad', 'angry', 'frustrated', 'disappointed', 'hate', 'terrible', 'awful', 'horrible', 'hopeless', 'worthless', 'miserable', 'stressful', 'stress', 'anxiety', 'worried', 'scared', 'afraid', 'tired', 'exhausted', 'lonely', 'alone', 'useless', 'failure'],
-            'neutral': ['okay', 'fine', 'normal', 'average', 'usual', 'regular']
+            'positive': [
+                'happy', 'joy', 'excited', 'love', 'great', 'wonderful', 'amazing', 'fantastic', 'blessed', 'grateful', 'optimistic', 'good', 'nice', 'perfect', 'awesome', 'brilliant', 'excellent', 'fixed', 'solved', 'better', 'relief', 'cheered', 'helped',
+                'lol', 'haha', 'lmao', 'rofl', '😂', '😊', '😄', '😆', '😉', '😎', '😋', '😍', '🥰', '😘', '😗', '😙', '😚', '🙂', '😀', '😃', '😄', '😁', '😅', '🤣', '😊', '😇', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '🤑', '🤠'
+            ],
+            'negative': [
+                'sad', 'angry', 'frustrated', 'disappointed', 'hate', 'terrible', 'awful', 'horrible', 'hopeless', 'worthless', 'miserable', 'stressful', 'stress', 'anxiety', 'worried', 'scared', 'afraid', 'tired', 'exhausted', 'lonely', 'alone', 'useless', 'failure',
+                'drowning', 'sinking', 'suffocating', 'dying inside', 'dead inside', 'empty inside', 'broken', 'shattered', 'crushed', 'devastated', 'heartbroken', 'soul crushing', 'mentally exhausted', 'emotionally drained', 'spirit broken',
+                '😩', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '😶', '😐', '😑', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕'
+            ],
+            'neutral': [
+                'okay', 'fine', 'normal', 'average', 'usual', 'regular', 'meh', 'whatever', 'idk', 'idc',
+                '😐', '😑', '😶', '😯', '😦', '😧', '😮', '😲', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😯', '😦', '😧', '😮', '😲'
+            ]
         }
         
         # 转折词（新增）
@@ -142,22 +233,37 @@ class FeatureExtractor:
         for category, keywords in self.depression_keywords.items():
             count = 0
             for keyword in keywords:
-                # 使用单词边界匹配，避免部分匹配
-                pattern = r'\b' + re.escape(keyword) + r'\b'
-                count += len(re.findall(pattern, text_lower))
+                # 对于短语，使用更灵活的匹配
+                if ' ' in keyword:
+                    # 短语匹配，允许部分匹配
+                    if keyword in text_lower:
+                        count += 1
+                else:
+                    # 单词匹配，使用单词边界
+                    pattern = r'\b' + re.escape(keyword) + r'\b'
+                    count += len(re.findall(pattern, text_lower))
             features[f'depression_{category}_count'] = count
         
         # 总抑郁关键词数量
-        all_depression_words = [word for words in self.depression_keywords.values() for word in words]
-        features['total_depression_words'] = sum(text_lower.count(word) for word in all_depression_words)
+        total_count = 0
+        for category, keywords in self.depression_keywords.items():
+            for keyword in keywords:
+                if ' ' in keyword:
+                    if keyword in text_lower:
+                        total_count += 1
+                else:
+                    pattern = r'\b' + re.escape(keyword) + r'\b'
+                    total_count += len(re.findall(pattern, text_lower))
+        
+        features['total_depression_words'] = total_count
         
         # 抑郁词汇密度
         word_count = len(text.split())
-        features['depression_word_density'] = features['total_depression_words'] / word_count if word_count > 0 else 0
+        features['depression_word_density'] = total_count / word_count if word_count > 0 else 0
         
         # 抑郁词汇类别数
         features['depression_categories'] = sum(1 for category, keywords in self.depression_keywords.items() 
-                                              if any(text_lower.count(keyword) > 0 for keyword in keywords))
+                                              if features[f'depression_{category}_count'] > 0)
         
         return features
     
