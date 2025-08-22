@@ -1,6 +1,6 @@
 """
 模型工厂
-用于统一创建和管理不同类型的模型
+用于统一创建和管理BERT模型
 """
 
 import logging
@@ -9,7 +9,6 @@ import numpy as np
 
 from .base_model import BaseModel
 from .bert_capsule_model import BertCapsuleWrapper
-from .traditional_models import TraditionalModels, TraditionalModelWithTuning
 
 logger = logging.getLogger(__name__)
 
@@ -18,49 +17,23 @@ class ModelFactory:
     """模型工厂类"""
     
     # 支持的模型类型
-    TRADITIONAL_MODELS = {
-        'svm', 'random_forest', 'gradient_boosting', 'logistic_regression',
-        'naive_bayes', 'knn', 'decision_tree'
-    }
-    
     DEEP_MODELS = {
         'bert_capsule'
     }
     
     @classmethod
-    def create_model(cls, model_type: str, model_category: str = "traditional", 
-                    **kwargs) -> BaseModel:
+    def create_model(cls, model_type: str, **kwargs) -> BaseModel:
         """
         创建模型实例
         
         Args:
             model_type: 模型类型
-            model_category: 模型类别 ('traditional', 'deep')
             **kwargs: 模型参数
             
         Returns:
             模型实例
         """
-        if model_category == "traditional":
-            return cls._create_traditional_model(model_type, **kwargs)
-        elif model_category == "deep":
-            return cls._create_deep_model(model_type, **kwargs)
-        else:
-            raise ValueError(f"不支持的模型类别: {model_category}")
-    
-    @classmethod
-    def _create_traditional_model(cls, model_type: str, **kwargs) -> TraditionalModels:
-        """创建传统机器学习模型"""
-        if model_type not in cls.TRADITIONAL_MODELS:
-            raise ValueError(f"不支持的传统模型类型: {model_type}")
-        
-        # 检查是否需要超参数调优
-        use_tuning = kwargs.pop('use_tuning', False)
-        
-        if use_tuning:
-            return TraditionalModelWithTuning(model_type, **kwargs)
-        else:
-            return TraditionalModels(model_type, **kwargs)
+        return cls._create_deep_model(model_type, **kwargs)
     
     @classmethod
     def _create_deep_model(cls, model_type: str, **kwargs) -> BaseModel:
@@ -77,25 +50,24 @@ class ModelFactory:
     def get_available_models(cls) -> Dict[str, List[str]]:
         """获取所有可用的模型类型"""
         return {
-            'traditional': list(cls.TRADITIONAL_MODELS),
             'deep': list(cls.DEEP_MODELS)
         }
     
     @classmethod
-    def get_model_info(cls, model_type: str, model_category: str = "traditional") -> Dict[str, Any]:
+    def get_model_info(cls, model_type: str) -> Dict[str, Any]:
         """获取模型信息"""
         try:
-            model = cls.create_model(model_type, model_category)
+            model = cls.create_model(model_type)
             return {
                 'model_type': model_type,
-                'model_category': model_category,
+                'model_category': 'deep',
                 'model_name': model.model_name,
                 'is_trained': model.is_trained
             }
         except Exception as e:
             return {
                 'model_type': model_type,
-                'model_category': model_category,
+                'model_category': 'deep',
                 'error': str(e)
             }
     
@@ -107,7 +79,6 @@ class ModelFactory:
         Args:
             model_configs: 模型配置列表，每个配置包含:
                 - model_type: 模型类型
-                - model_category: 模型类别
                 - **kwargs: 其他参数
                 
         Returns:
@@ -116,11 +87,10 @@ class ModelFactory:
         models = []
         for config in model_configs:
             model_type = config.pop('model_type')
-            model_category = config.pop('model_category', 'traditional')
-            model = cls.create_model(model_type, model_category, **config)
+            model = cls.create_model(model_type, **config)
             models.append(model)
         
-        logger.info(f"创建了 {len(models)} 个模型用于比较")
+        logger.info(f"创建了 {len(models)} 个BERT模型用于比较")
         return models
 
 
@@ -150,12 +120,12 @@ class ModelManager:
         """列出所有模型"""
         return {name: model.model_name for name, model in self.models.items()}
     
-    def train_all_models(self, X_train: np.ndarray, y_train: np.ndarray,
-                        X_val: Optional[np.ndarray] = None,
+    def train_all_models(self, texts: List[str], y_train: np.ndarray,
+                        val_texts: Optional[List[str]] = None,
                         y_val: Optional[np.ndarray] = None,
                         **kwargs) -> Dict[str, Dict[str, Any]]:
         """
-        训练所有模型
+        训练所有BERT模型
         
         Returns:
             训练结果字典
@@ -165,17 +135,7 @@ class ModelManager:
         for name, model in self.models.items():
             logger.info(f"训练模型: {name}")
             try:
-                # 检查模型类型，决定训练方式
-                if isinstance(model, BertCapsuleWrapper):
-                    # 对于BERT模型，需要文本数据
-                    if 'texts' not in kwargs:
-                        raise ValueError("BERT模型需要文本数据，请提供'texts'参数")
-                    texts = kwargs['texts']
-                    val_texts = kwargs.get('val_texts')
-                    history = model.train(texts, y_train, val_texts, y_val, **kwargs)
-                else:
-                    # 传统模型使用特征数据
-                    history = model.train(X_train, y_train, X_val, y_val, **kwargs)
+                history = model.train(texts, y_train, val_texts, y_val, **kwargs)
                 
                 results[name] = {
                     'success': True,
@@ -191,10 +151,9 @@ class ModelManager:
         self.training_results = results
         return results
     
-    def evaluate_all_models(self, X_test: np.ndarray, y_test: np.ndarray,
-                          test_texts: Optional[List[str]] = None) -> Dict[str, Dict[str, Any]]:
+    def evaluate_all_models(self, test_texts: List[str], y_test: np.ndarray) -> Dict[str, Dict[str, Any]]:
         """
-        评估所有模型
+        评估所有BERT模型
         
         Returns:
             评估结果字典
@@ -208,15 +167,7 @@ class ModelManager:
             
             logger.info(f"评估模型: {name}")
             try:
-                # 检查模型类型，决定评估方式
-                if isinstance(model, BertCapsuleWrapper):
-                    # 对于BERT模型，需要文本数据
-                    if test_texts is None:
-                        raise ValueError("BERT模型需要文本数据，请提供'test_texts'参数")
-                    metrics = model.evaluate(test_texts, y_test)
-                else:
-                    # 传统模型使用特征数据
-                    metrics = model.evaluate(X_test, y_test)
+                metrics = model.evaluate(test_texts, y_test)
                 
                 results[name] = {
                     'success': True,

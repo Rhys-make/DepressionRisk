@@ -253,11 +253,28 @@ class DataProcessor:
         
         # 清洗文本
         logger.info("清洗文本...")
-        data['cleaned_text'] = self.preprocessor.clean_batch(data[self.text_column].tolist())
+        # 修复：使用正确的方法调用，并设置合适的清洗参数
+        cleaned_texts = self.preprocessor.text_cleaner.clean_batch(
+            data[self.text_column].tolist(),
+            remove_urls=True,           # 移除URL
+            remove_emails=True,         # 移除邮箱
+            remove_phones=True,         # 移除电话号码
+            remove_dates=False,         # 保留日期（可能包含情感信息）
+            remove_times=False,         # 保留时间
+            remove_hashtags=False,      # 保留话题标签（重要情感信息）
+            remove_mentions=False,      # 保留@提及
+            remove_numbers=False,       # 保留数字
+            normalize_emoticons=True,   # 标准化表情符号
+            remove_repeated_chars=True, # 移除重复字符
+            remove_repeated_words=True, # 移除重复单词
+            lowercase=True              # 转换为小写
+        )
+        data['cleaned_text'] = cleaned_texts
         
         # 提取特征
         logger.info("提取特征...")
-        features_list = self.preprocessor.extract_batch_features(data['cleaned_text'].tolist())
+        # 修复：使用正确的方法调用
+        features_list = self.preprocessor.feature_extractor.extract_batch_features(data['cleaned_text'].tolist())
         
         # 将特征添加到数据框
         if features_list:
@@ -283,6 +300,9 @@ class DataProcessor:
         else:
             logger.warning("没有提取到特征")
             self.feature_names = []
+        
+        # 将清洗后的文本设置为新的文本列
+        data[self.text_column] = data['cleaned_text']
         
         logger.info(f"处理完成: {len(data)} 行, {len(self.feature_names)} 个特征")
         return data

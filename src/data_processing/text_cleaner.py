@@ -153,8 +153,27 @@ class TextCleaner:
     
     def _normalize_emoticons(self, text: str) -> str:
         """标准化表情符号"""
+        # 处理传统表情符号
         for emoticon, replacement in self.emoticon_map.items():
             text = text.replace(emoticon, replacement)
+        
+        # 处理现代Unicode表情符号
+        import re
+        # 匹配Unicode表情符号范围
+        emoji_pattern = re.compile(
+            "["
+            "\U0001F600-\U0001F64F"  # emoticons
+            "\U0001F300-\U0001F5FF"  # symbols & pictographs
+            "\U0001F680-\U0001F6FF"  # transport & map symbols
+            "\U0001F1E0-\U0001F1FF"  # flags (iOS)
+            "\U00002702-\U000027B0"
+            "\U000024C2-\U0001F251"
+            "]+", flags=re.UNICODE
+        )
+        
+        # 将表情符号替换为描述性文本
+        text = emoji_pattern.sub(' [emoji] ', text)
+        
         return text
     
     def extract_features(self, text: str) -> Dict[str, any]:
